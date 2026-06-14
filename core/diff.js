@@ -94,104 +94,236 @@ function diffText(oldNode, newNode) {
 }
 
 /**
- * 对比两个子节点列表（key-based diff）
+ * 对比两个子节点列表（优化版 key-based diff）
+ * 采用 Vue/React 风格的双端比较 + LIS 最小移动算法
  * @param {Array<Node>} oldChildren
  * @param {Array<Node>} newChildren
  * @returns {Array<{type: string, ...}>}
  */
 export function diffChildren(oldChildren, newChildren) {
   const ops = [];
+  let oldStartIdx = 0;
+  let oldEndIdx = oldChildren.length - 1;
+  let newStartIdx = 0;
+  let newEndIdx = newChildren.length - 1;
 
-  // 1. 构建旧子节点的 key 映射
-  const oldKeyMap = new Map();
-  const oldNoKey = [];
-  for (let i = 0; i < oldChildren.length; i++) {
-    const key = getKey(oldChildren[i]);
-    if (key) {
-      oldKeyMap.set(key, { node: oldChildren[i], index: i });
-    } else {
-      oldNoKey.push({ node: oldChildren[i], index: i });
+  // 1. 双端预处理：从头和尾同时比较，跳过相同节点
+  while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+    const oldStart = oldChildren[oldStartIdx];
+    const oldEnd = oldChildren[oldEndIdx];
+    const newStart = newChildren[newStartIdx];
+    const newEnd = newChildren[newEndIdx];
+
+    // 头头相同
+    if (isSameNode(oldStart, newStart)) {
+      const childOps = diffNode(oldStart, newStart);
+      if (childOps.length > 0) {
+        ops.push({ type: 'updateChild', oldNode: oldStart, newNode: newStart, ops: childOps });
+      }
+      oldStartIdx++;
+      newStartIdx++;
+      continue;
     }
+
+    // 尾尾相同
+    if (isSameNode(oldEnd, newEnd)) {
+      const childOps = diffNode(oldEnd, newEnd);
+      if (childOps.length > 0) {
+        ops.push({ type: 'updateChild', oldNode: oldEnd, newNode: newEnd, ops: childOps });
+      }
+      oldEndIdx--;
+      newEndIdx--;
+      continue;
+    }
+
+    // 头尾交叉
+    if (isSameNode(oldStart, newEnd)) {
+      const childOps = diffNode(oldStart, newEnd);
+      if (childOps.length > 0) {
+        ops.push({ type: 'updateChild', oldNode: oldStart, newNode: newEnd, ops: childOps });
+      }
+      ops.push({ type: 'moveChild', node: oldStart, to: newEndIdx + 1 });
+      oldStartIdx++;
+      newEndIdx--;
+      continue;
+    }
+
+    // 尾头交叉
+    if (isSameNode(oldEnd, newStart)) {
+      const childOps = diffNode(oldEnd, newStart);
+      if (childOps.length > 0) {
+        ops.push({ type: 'updateChild', oldNode: oldEnd, newNode: newStart, ops: childOps });
+      }
+      ops.push({ type: 'moveChild', node: oldEnd, to: newStartIdx });
+      oldEndIdx--;
+      newStartIdx++;
+      continue;
+    }
+
+    break; // 双端无法匹配，进入 key-based 处理
   }
 
-  // 2. 遍历新子节点，匹配或创建
-  const usedOldKeys = new Set();
-  const usedOldNoKey = new Set();
-  const moves = []; // 记录需要移动的节点
-
-  for (let i = 0; i < newChildren.length; i++) {
-    const newChild = newChildren[i];
-    const key = getKey(newChild);
-
-    let matchedOld = null;
-
-    if (key && oldKeyMap.has(key)) {
-      // 按 key 匹配
-      const oldInfo = oldKeyMap.get(key);
-      if (isSameNodeType(oldInfo.node, newChild)) {
-        matchedOld = oldInfo;
-        usedOldKeys.add(key);
+  // 2. 处理剩余节点：使用 key-map 进行精确匹配
+  if (oldStartIdx <= oldEndIdx || newStartIdx <= newEndIdx) {
+    // 构建旧节点 key 映射（仅针对剩余未处理的节点）
+    const oldKeyMap = new Map();
+    for (let i = oldStartIdx; i <= oldEndIdx; i++) {
+      const key = getKey(oldChildren[i]);
+      if (key) {
+        oldKeyMap.set(key, { node: oldChildren[i], index: i });
       }
-    } else if (!key && oldNoKey.length > 0) {
-      // 无 key，按顺序匹配第一个未使用的同类型节点
-      for (const oldInfo of oldNoKey) {
-        if (!usedOldNoKey.has(oldInfo.index) && isSameNodeType(oldInfo.node, newChild)) {
-          matchedOld = oldInfo;
-          usedOldNoKey.add(oldInfo.index);
-          break;
+    }
+
+    // 记录新节点序列中，哪些位置需要复用旧节点
+    const newSequence = []; // { newNode, oldNode | null }[]
+    const removedOldNodes = new Set(); // 需要删除的旧节点
+
+    // 标记剩余旧节点为待删除
+    for (let i = oldStartIdx; i <= oldEndIdx; i++) {
+      removedOldNodes.add(oldChildren[i]);
+    }
+
+    // 遍历新节点，匹配或创建
+    for (let i = newStartIdx; i <= newEndIdx; i++) {
+      const newChild = newChildren[i];
+      const key = getKey(newChild);
+      let matchedOld = null;
+
+      if (key && oldKeyMap.has(key)) {
+        const oldInfo = oldKeyMap.get(key);
+        if (isSameNodeType(oldInfo.node, newChild)) {
+          matchedOld = oldInfo.node;
+          removedOldNodes.delete(matchedOld); // 标记为复用，不移除
         }
       }
+
+      newSequence.push({ newNode: newChild, oldNode: matchedOld });
     }
 
-    if (matchedOld) {
-      // 递归 diff
-      const childOps = diffNode(matchedOld.node, newChild);
-      if (childOps.length > 0) {
-        ops.push({
-          type: 'updateChild',
-          oldNode: matchedOld.node,
-          newNode: newChild,
-          ops: childOps,
-        });
-      }
+    // 3. 处理删除：移除未被复用的旧节点
+    for (const node of removedOldNodes) {
+      ops.push({ type: 'removeChild', node });
+    }
 
-      // 记录位置变化
-      if (matchedOld.index !== i) {
-        moves.push({ node: matchedOld.node, from: matchedOld.index, to: i });
+    // 4. 处理创建和更新
+    const patchedOldIndices = []; // 记录复用旧节点的原始索引
+    for (let i = 0; i < newSequence.length; i++) {
+      const { newNode, oldNode } = newSequence[i];
+      const actualIndex = newStartIdx + i;
+
+      if (oldNode) {
+        // 复用旧节点：diff + 可能需要移动
+        const childOps = diffNode(oldNode, newNode);
+        if (childOps.length > 0) {
+          ops.push({ type: 'updateChild', oldNode, newNode, ops: childOps });
+        }
+        patchedOldIndices.push({ node: oldNode, newIndex: actualIndex });
+      } else {
+        // 创建新节点
+        ops.push({ type: 'createChild', index: actualIndex, node: newNode });
       }
-    } else {
-      // 创建新节点
-      ops.push({
-        type: 'createChild',
-        index: i,
-        node: newChild,
+    }
+
+    // 5. 使用 LIS 计算最小移动操作
+    if (patchedOldIndices.length > 1) {
+      // 提取当前旧节点在父元素中的索引顺序
+      const currentPositions = patchedOldIndices.map(item => {
+        // 找到节点在原始 oldChildren 中的位置
+        return oldChildren.indexOf(item.node);
       });
-    }
-  }
 
-  // 3. 处理需要移除的旧节点
-  for (const [key, oldInfo] of oldKeyMap) {
-    if (!usedOldKeys.has(key)) {
-      ops.push({ type: 'removeChild', node: oldInfo.node });
-    }
-  }
-  for (const oldInfo of oldNoKey) {
-    if (!usedOldNoKey.has(oldInfo.index)) {
-      ops.push({ type: 'removeChild', node: oldInfo.node });
-    }
-  }
+      // 计算 LIS（最长递增子序列）
+      const lis = getLIS(currentPositions);
+      const lisSet = new Set(lis);
 
-  // 4. 处理移动（按 from 位置降序处理，避免索引错乱）
-  moves.sort((a, b) => b.from - a.from);
-  for (const move of moves) {
-    ops.push({
-      type: 'moveChild',
-      node: move.node,
-      to: move.to,
-    });
+      // 不在 LIS 中的节点需要移动
+      for (let i = 0; i < patchedOldIndices.length; i++) {
+        if (!lisSet.has(i)) {
+          ops.push({
+            type: 'moveChild',
+            node: patchedOldIndices[i].node,
+            to: patchedOldIndices[i].newIndex,
+          });
+        }
+      }
+    } else if (patchedOldIndices.length === 1) {
+      // 只有一个复用节点，检查是否需要移动
+      const { node, newIndex } = patchedOldIndices[0];
+      const oldIndex = oldChildren.indexOf(node);
+      // 如果位置变化了，需要移动
+      if (oldIndex !== newIndex && oldIndex >= 0) {
+        ops.push({ type: 'moveChild', node, to: newIndex });
+      }
+    }
   }
 
   return ops;
+}
+
+/**
+ * 检查两个节点是否相同（用于双端比较）
+ * 同时检查 key 和节点类型
+ * @param {Node} a
+ * @param {Node} b
+ * @returns {boolean}
+ */
+function isSameNode(a, b) {
+  if (!isSameNodeType(a, b)) return false;
+  const keyA = getKey(a);
+  const keyB = getKey(b);
+  if (keyA || keyB) return keyA === keyB;
+  return true;
+}
+
+/**
+ * 计算最长递增子序列（LIS）
+ * 返回的是索引数组，表示在原数组中的位置
+ * @param {number[]} arr
+ * @returns {number[]}
+ */
+function getLIS(arr) {
+  if (arr.length === 0) return [];
+
+  const tails = []; // tails[i] = 长度为 i+1 的递增子序列的最小末尾值
+  const tailsIndices = []; // 对应的索引
+  const prevIndices = new Array(arr.length).fill(-1); // 记录前驱节点
+
+  for (let i = 0; i < arr.length; i++) {
+    const num = arr[i];
+    // 二分查找：找到 tails 中第一个 >= num 的位置
+    let left = 0, right = tails.length;
+    while (left < right) {
+      const mid = (left + right) >> 1;
+      if (tails[mid] < num) {
+        left = mid + 1;
+      } else {
+        right = mid;
+      }
+    }
+
+    if (left === tails.length) {
+      tails.push(num);
+      tailsIndices.push(i);
+    } else {
+      tails[left] = num;
+      tailsIndices[left] = i;
+    }
+
+    // 记录前驱
+    if (left > 0) {
+      prevIndices[i] = tailsIndices[left - 1];
+    }
+  }
+
+  // 回溯构建 LIS 索引
+  const result = [];
+  let current = tailsIndices[tailsIndices.length - 1];
+  while (current !== -1) {
+    result.unshift(current);
+    current = prevIndices[current];
+  }
+
+  return result;
 }
 
 /**
