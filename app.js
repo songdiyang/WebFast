@@ -37,8 +37,8 @@ http.setErrorHandler((err) => {
     console.error('[HTTP Error]', err);
   }
   if (err.status === 401) {
-    // 未授权，跳转到登录（使用全局暴露的 router）
-    window.$router && window.$router.navigate('/login');
+    // 未授权，跳转到登录（使用局部 router 引用）
+    router.navigate('/login');
   }
 });
 
@@ -73,6 +73,23 @@ if (hasStaticContent && window.location.pathname === '/') {
   router.start();
 }
 
-// 将 router 暴露到全局，方便调试
-window.$router = router;
-window.$http = http;
+// 仅在调试模式下暴露到全局，使用 Symbol 命名空间避免冲突
+const WF_SYMBOL = Symbol.for('WebFast');
+if (config.debug) {
+  window[WF_SYMBOL] = { router, http };
+  // 保留兼容性的 $ 前缀，但添加警告
+  Object.defineProperty(window, '$router', {
+    get() {
+      console.warn('[WebFast] window.$router is deprecated. Use window[Symbol.for("WebFast")].router instead.');
+      return router;
+    },
+    configurable: true,
+  });
+  Object.defineProperty(window, '$http', {
+    get() {
+      console.warn('[WebFast] window.$http is deprecated. Use window[Symbol.for("WebFast")].http instead.');
+      return http;
+    },
+    configurable: true,
+  });
+}

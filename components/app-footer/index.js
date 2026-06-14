@@ -21,6 +21,6 @@ export default class AppFooter extends WebFastComponent {
       // 标准模式：加载模板渲染
       await this._init();
     }
-    this.onConnected && this.onConnected();
+    if (this.onConnected) this.onConnected();
   }
 }

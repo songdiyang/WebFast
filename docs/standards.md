@@ -1476,6 +1476,12 @@ AI 生成代码后，必须按照以下清单进行自检：
 - [ ] 没有使用 `eval()` 或 `new Function()`
 - [ ] DOM 操作使用 `textContent` 代替 `innerHTML`（用户输入场景）
 - [ ] 事件监听使用 `addEventListener`，没有内联事件（`onclick`）
+- [ ] 所有异步操作使用 `try/catch` 包裹，错误有明确处理路径
+- [ ] 事件监听器在组件卸载时正确移除，避免内存泄漏
+- [ ] 定时器（setTimeout/setInterval）在组件卸载时清理
+- [ ] 使用 AbortController 取消未完成的 fetch 请求
+- [ ] Promise 链中有 `.catch()` 或 `try/catch` 捕获异常
+- [ ] 不捕获异常后静默处理，至少记录日志或上报
 
 ### 5.4 无障碍检查
 
@@ -1485,6 +1491,23 @@ AI 生成代码后，必须按照以下清单进行自检：
 - [ ] ARIA 属性使用正确（不冗余、不错误）
 - [ ] 动态内容更新有 `aria-live` 通知
 - [ ] 颜色不单独传达信息（有图标/文字辅助）
+- [ ] 使用 axe-core 或 Lighthouse 进行自动化可访问性测试
+- [ ] 页面有正确的 `lang` 属性声明
+- [ ] 表单错误信息通过 `aria-describedby` 或 `aria-errormessage` 关联
+- [ ] 复杂组件（如 tabs、dialog）使用正确的 ARIA 角色和状态管理
+
+### 5.4 性能优化检查
+
+- [ ] 事件委托优先于大量单独事件绑定（动态列表场景）
+- [ ] 防抖（debounce）处理高频输入事件（搜索、滚动、resize）
+- [ ] 节流（throttle）处理高频触发事件（滚动、mousemove）
+- [ ] 图片使用 `loading="lazy"` 或原生懒加载
+- [ ] 长列表使用虚拟滚动或分页，避免一次性渲染 1000+ 节点
+- [ ] 动画使用 `transform` 和 `opacity`，避免触发重排（reflow）
+- [ ] 大数据量操作使用 `requestIdleCallback` 或分片处理
+- [ ] 避免在循环中频繁操作 DOM，使用 DocumentFragment 批量插入
+- [ ] 组件卸载时清理所有副作用（事件、定时器、订阅、请求）
+- [ ] 状态更新使用批量/合并策略，避免连续触发多次重渲染
 
 ### 5.5 安全检查
 

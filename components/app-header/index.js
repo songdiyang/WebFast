@@ -25,15 +25,27 @@ export default class AppHeader extends WebFastComponent {
   }
 
   events() {
+    // 使用事件委托，绑定到 header 容器上，更高效且支持动态内容
     return {
-      'click .nav-link': this.onNavClick,
+      'click .header-inner': this.onNavClick,
     };
   }
 
   onNavClick(e) {
-    const href = e.target.getAttribute('href');
-    // 外部链接不拦截
-    if (href && (href.startsWith('http') || href.startsWith('//'))) {
+    const link = e.target.closest('a');
+    if (!link) return;
+    const href = link.getAttribute('href');
+    // 外部链接、锚点、mailto、tel 等不拦截
+    if (
+      !href ||
+      href.startsWith('http') ||
+      href.startsWith('//') ||
+      href.startsWith('#') ||
+      href.startsWith('mailto:') ||
+      href.startsWith('tel:') ||
+      link.hasAttribute('download') ||
+      link.target === '_blank'
+    ) {
       return;
     }
     e.preventDefault();

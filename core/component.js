@@ -79,8 +79,10 @@ export class WebFastComponent extends HTMLElement {
     this._shadow = shadow;
     this._eventListeners = [];
     this._storeUnsubscribers = [];
+    this._eventBusListeners = [];
     this._initialized = false;
     this._pendingData = null;
+    this._isConnected = false;
 
     // 注入快捷引用
     this.$http = http;
@@ -97,8 +99,11 @@ export class WebFastComponent extends HTMLElement {
    * 自动加载模板和样式，绑定事件，注册 store 订阅
    */
   async connectedCallback() {
+    this._isConnected = true;
     await this._init();
-    this.onConnected && this.onConnected();
+    if (this._isConnected && this.onConnected) {
+      this.onConnected();
+    }
   }
 
   /**
@@ -106,6 +111,7 @@ export class WebFastComponent extends HTMLElement {
    * 自动清理事件监听器和 store 订阅
    */
   disconnectedCallback() {
+    this._isConnected = false;
     this._cleanup();
     this.onDisconnected && this.onDisconnected();
   }
@@ -125,6 +131,9 @@ export class WebFastComponent extends HTMLElement {
   async _init() {
     if (this._initialized) return;
     this._initialized = true;
+
+    // 如果组件在异步加载期间已被移除，停止初始化
+    if (!this._isConnected) return;
 
     const [templateHtml, styleCss] = await Promise.all([
       this._templateUrl ? loadText(this._resolveUrl(this._templateUrl)) : Promise.resolve(''),
@@ -291,6 +300,18 @@ export class WebFastComponent extends HTMLElement {
   _cleanup() {
     this._cleanupEvents();
     this._cleanupStores();
+    this._cleanupEventBus();
+  }
+
+  /**
+   * 清理 EventBus 监听器
+   * @private
+   */
+  _cleanupEventBus() {
+    for (const { eventName, handler } of this._eventBusListeners) {
+      EventBus.off(eventName, handler);
+    }
+    this._eventBusListeners = [];
   }
 
   // ============== 公共 API ==============
@@ -336,6 +357,7 @@ export class WebFastComponent extends HTMLElement {
    */
   listen(eventName, handler) {
     EventBus.on(eventName, handler);
+    this._eventBusListeners.push({ eventName, handler });
   }
 
   /**
@@ -345,6 +367,9 @@ export class WebFastComponent extends HTMLElement {
    */
   unlisten(eventName, handler) {
     EventBus.off(eventName, handler);
+    this._eventBusListeners = this._eventBusListeners.filter(
+      (l) => !(l.eventName === eventName && l.handler === handler)
+    );
   }
 }
 

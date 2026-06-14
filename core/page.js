@@ -51,6 +51,7 @@ export class WebFastPage {
     this._styleUrl = style;
     this._eventListeners = [];
     this._storeUnsubscribers = [];
+    this._eventBusListeners = [];
     this._initialized = false;
     this._pendingData = null;
 
@@ -226,6 +227,18 @@ export class WebFastPage {
   _cleanup() {
     this._cleanupEvents();
     this._cleanupStores();
+    this._cleanupEventBus();
+  }
+
+  /**
+   * 清理 EventBus 监听器
+   * @private
+   */
+  _cleanupEventBus() {
+    for (const { eventName, handler } of this._eventBusListeners) {
+      EventBus.off(eventName, handler);
+    }
+    this._eventBusListeners = [];
   }
 
   // ============== 公共 API ==============
@@ -245,9 +258,13 @@ export class WebFastPage {
 
   listen(eventName, handler) {
     EventBus.on(eventName, handler);
+    this._eventBusListeners.push({ eventName, handler });
   }
 
   unlisten(eventName, handler) {
     EventBus.off(eventName, handler);
+    this._eventBusListeners = this._eventBusListeners.filter(
+      (l) => !(l.eventName === eventName && l.handler === handler)
+    );
   }
 }

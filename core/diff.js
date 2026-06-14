@@ -495,11 +495,31 @@ export function patchChildren(parent, patches) {
  * @param {Node} node
  * @returns {Node}
  */
-function cloneNode(node) {
+/**
+ * 轻量克隆节点（复用已有 DOM 节点以减少 GC 压力）
+ * 对于 Element 节点，优先复用 tagName 相同的旧节点
+ * @param {Node} node
+ * @param {Node} [oldNode] - 可选的旧节点，用于复用
+ * @returns {Node}
+ */
+function cloneNode(node, oldNode) {
   if (node.nodeType === Node.TEXT_NODE) {
     return document.createTextNode(node.textContent);
   }
   if (node.nodeType === Node.ELEMENT_NODE) {
+    // 尝试复用旧节点（相同标签类型）
+    if (oldNode && oldNode.nodeType === Node.ELEMENT_NODE && oldNode.tagName === node.tagName) {
+      // 复用旧节点，只更新属性
+      for (const attr of oldNode.attributes) {
+        if (!node.hasAttribute(attr.name)) {
+          oldNode.removeAttribute(attr.name);
+        }
+      }
+      for (const attr of node.attributes) {
+        oldNode.setAttribute(attr.name, attr.value);
+      }
+      return oldNode;
+    }
     const clone = document.createElement(node.tagName);
     for (const attr of node.attributes) {
       clone.setAttribute(attr.name, attr.value);
@@ -517,7 +537,7 @@ function cloneNode(node) {
  * 保留：焦点、滚动位置、表单值
  * @param {Function} fn - 执行 DOM 操作的函数
  */
-export function preserveState(fn) {
+export function preserveState(fn, container = document) {
   // 1. 记录焦点
   const activeElement = document.activeElement;
   const activeElementId = activeElement?.id || null;
@@ -527,21 +547,34 @@ export function preserveState(fn) {
   const selectionStart = activeElement?.selectionStart;
   const selectionEnd = activeElement?.selectionEnd;
 
-  // 2. 记录所有滚动位置
+  // 2. 记录容器内滚动位置（限制范围，避免全文档扫描）
   const scrollPositions = new Map();
-  document.querySelectorAll('*').forEach((el) => {
+  const scrollables = container.querySelectorAll
+    ? container.querySelectorAll('[data-preserve-scroll], .scrollable, [overflow-auto], [overflow-scroll]')
+    : [];
+  for (const el of scrollables) {
     if (el.scrollTop > 0 || el.scrollLeft > 0) {
       scrollPositions.set(el, {
         top: el.scrollTop,
         left: el.scrollLeft,
       });
     }
-  });
+  }
+  // 同时记录容器本身
+  if (container.scrollTop > 0 || container.scrollLeft > 0) {
+    scrollPositions.set(container, {
+      top: container.scrollTop,
+      left: container.scrollLeft,
+    });
+  }
 
-  // 3. 记录表单值
+  // 3. 记录容器内表单值
   const formValues = new Map();
-  document.querySelectorAll('input, textarea, select').forEach((el) => {
-    const key = getElementSelector(el);
+  const forms = container.querySelectorAll
+    ? container.querySelectorAll('input, textarea, select')
+    : [];
+  for (const el of forms) {
+    const key = el.id || el.name || getElementSelector(el);
     if (key) {
       formValues.set(key, {
         value: el.value,
@@ -549,7 +582,7 @@ export function preserveState(fn) {
         selectedIndex: el.selectedIndex,
       });
     }
-  });
+  }
 
   // 4. 执行 DOM 操作
   fn();
@@ -563,8 +596,10 @@ export function preserveState(fn) {
   }
 
   // 6. 恢复表单值
-  for (const [selector, data] of formValues) {
-    const el = document.querySelector(selector);
+  for (const [key, data] of formValues) {
+    const el = key.startsWith('#')
+      ? document.getElementById(key.slice(1))
+      : container.querySelector?.(`[name="${key}"]`) || container.querySelector?.(key);
     if (el) {
       if (data.value !== undefined) el.value = data.value;
       if (data.checked !== undefined) el.checked = data.checked;

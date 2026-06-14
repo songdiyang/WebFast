@@ -15,7 +15,9 @@ declare module '*/core/component.js' {
   export class WebFastComponent extends HTMLElement {
     constructor(options?: WebFastComponentOptions);
     $http: import('*/core/http.js').HttpClient;
+    /** @private */
     _templateUrl?: string;
+    /** @private */
     _styleUrl?: string;
     _shadow: boolean;
     _shadowRoot: HTMLElement | ShadowRoot;
@@ -23,7 +25,11 @@ declare module '*/core/component.js' {
     _pendingData: Record<string, any> | null;
     _eventListeners: Array<{ el: Element; eventType: string; boundHandler: EventListener }>;
     _storeUnsubscribers: Array<(() => void) | undefined>;
+    _eventBusListeners: Array<{ eventName: string; handler: (data: any) => void }>;
+    _isConnected: boolean;
     _baseUrl?: string;
+
+    static observedAttributes?: string[];
 
     connectedCallback(): Promise<void>;
     disconnectedCallback(): void;
@@ -70,10 +76,13 @@ declare module '*/core/page.js' {
     constructor(options?: WebFastPageOptions);
     $http: import('*/core/http.js').HttpClient;
     el: HTMLDivElement;
+    /** @private */
     _templateUrl?: string;
+    /** @private */
     _styleUrl?: string;
     _eventListeners: Array<{ el: Element; eventType: string; boundHandler: EventListener }>;
     _storeUnsubscribers: Array<(() => void) | undefined>;
+    _eventBusListeners: Array<{ eventName: string; handler: (data: any) => void }>;
     _initialized: boolean;
     _pendingData: Record<string, any> | null;
     _baseUrl?: string;
@@ -93,7 +102,7 @@ declare module '*/core/page.js' {
     onDisconnected?(): void;
     subscribe?(): string[];
     onStoreChanged?(storeName: string, state: any, oldState: any): void;
-    onRouteEnter?(params: Record<string, string>, query: Record<string, string>): void;
+    onRouteEnter?(params: Record<string, string>, query: Record<string, string>): void | Promise<void>;
   }
 }
 
@@ -101,14 +110,17 @@ declare module '*/core/router.js' {
   export interface RouteDefinition {
     path: string;
     page: () => Promise<any>;
-    beforeEnter?: (ctx: RouteContext) => boolean | Promise<boolean>;
-    beforeLeave?: (page: any, ctx: RouteContext) => boolean | Promise<boolean>;
+    children?: RouteDefinition[];
+    meta?: Record<string, any>;
+    beforeEnter?: (ctx: RouteContext) => boolean | string | Promise<boolean | string>;
+    beforeLeave?: (page: any, ctx: RouteContext) => boolean | string | Promise<boolean | string>;
   }
 
   export interface RouteContext {
     path: string;
     query: Record<string, string>;
     params: Record<string, string>;
+    meta?: Record<string, any>;
   }
 
   export interface RouterOptions {
@@ -116,6 +128,7 @@ declare module '*/core/router.js' {
     routes: RouteDefinition[];
     mode?: 'history' | 'hash';
     on404?: (ctx: { path: string; query: Record<string, string> }) => void;
+    scrollBehavior?: (to: RouteContext, from: RouteContext | null) => void;
   }
 
   export interface StartOptions {
@@ -127,6 +140,8 @@ declare module '*/core/router.js' {
     start(options?: StartOptions): void;
     destroy(): void;
     navigate(path: string, replace?: boolean): void;
+    beforeEach(fn: (to: RouteContext, from: RouteContext | null) => boolean | string | Promise<boolean | string>): void;
+    afterEach(fn: (to: RouteContext, from: RouteContext | null) => void): void;
   }
 }
 
@@ -154,16 +169,24 @@ declare module '*/core/diff.js' {
 }
 
 declare module '*/core/store.js' {
-  export interface StoreOptions {
+  export interface StoreModuleOptions {
     state?: Record<string, any>;
     actions?: Record<string, (state: any, payload: any) => any | Promise<any>>;
+    getters?: Record<string, (state: any) => any>;
+  }
+
+  export interface StoreOptions extends StoreModuleOptions {
+    modules?: Record<string, StoreModuleOptions>;
   }
 
   export interface Store {
     getState(): any;
     dispatch(actionName: string, payload?: any): void | Promise<void>;
     setState(partialState: Record<string, any>): void;
+    get(key: string): any;
     subscribe(fn: (state: any, oldState: any) => void): () => void;
+    module(name: string): Store | undefined;
+    use(plugin: (store: Store) => void): void;
   }
 
   export function createStore(name: string, options: StoreOptions): Store;
@@ -186,12 +209,12 @@ declare module '*/core/http.js' {
     addRequestInterceptor(fn: (config: RequestConfig) => RequestConfig): void;
     addResponseInterceptor(fn: (response: Response) => Response): void;
     setErrorHandler(fn: (error: Error, config: RequestConfig) => void): void;
-    request(url: string, config?: RequestConfig): Promise<any>;
-    get(url: string, config?: RequestConfig): Promise<any>;
-    post(url: string, body?: any, config?: RequestConfig): Promise<any>;
-    put(url: string, body?: any, config?: RequestConfig): Promise<any>;
-    patch(url: string, body?: any, config?: RequestConfig): Promise<any>;
-    delete(url: string, config?: RequestConfig): Promise<any>;
+    request<T = any>(url: string, config?: RequestConfig): Promise<T>;
+    get<T = any>(url: string, config?: RequestConfig): Promise<T>;
+    post<T = any>(url: string, body?: any, config?: RequestConfig): Promise<T>;
+    put<T = any>(url: string, body?: any, config?: RequestConfig): Promise<T>;
+    patch<T = any>(url: string, body?: any, config?: RequestConfig): Promise<T>;
+    delete<T = any>(url: string, config?: RequestConfig): Promise<T>;
   }
 
   export const http: HttpClient;

@@ -22,6 +22,7 @@ const ROOT = __dirname;
 const MIME_TYPES = {
   '.html': 'text/html',
   '.js': 'application/javascript',
+  '.mjs': 'application/javascript',
   '.css': 'text/css',
   '.json': 'application/json',
   '.png': 'image/png',
@@ -30,10 +31,14 @@ const MIME_TYPES = {
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
   '.eot': 'application/vnd.ms-fontobject',
+  '.wasm': 'application/wasm',
+  '.map': 'application/json',
 };
 
 /**
@@ -42,8 +47,10 @@ const MIME_TYPES = {
 function safePath(reqPath) {
   const decoded = decodeURIComponent(reqPath);
   const resolved = path.resolve(path.join(ROOT, decoded));
-  // 确保解析后的路径在 ROOT 目录内
-  if (!resolved.startsWith(ROOT)) {
+  // 确保解析后的路径在 ROOT 目录内（使用 normalize 处理 Windows 路径差异）
+  const rootNormalized = path.normalize(ROOT + path.sep);
+  const resolvedNormalized = path.normalize(resolved + path.sep);
+  if (!resolvedNormalized.startsWith(rootNormalized)) {
     return null;
   }
   return resolved;
@@ -51,10 +58,17 @@ function safePath(reqPath) {
 
 /**
  * 发送文件响应
+ * 支持缓存策略和基本安全头
  */
 function sendFile(res, filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+
+  // 静态资源缓存策略：immutable 文件长期缓存，其他不缓存
+  const isImmutable = ['.js', '.mjs', '.css', '.woff', '.woff2', '.ttf', '.eot', '.wasm', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.ico'].includes(ext);
+  const cacheControl = isImmutable
+    ? 'public, max-age=31536000, immutable'
+    : 'no-cache';
 
   fs.readFile(filePath, (err, data) => {
     if (err) {
@@ -64,7 +78,10 @@ function sendFile(res, filePath) {
     }
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': 'no-cache',
+      'Cache-Control': cacheControl,
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     });
     res.end(data);
   });
@@ -76,6 +93,35 @@ function sendFile(res, filePath) {
 function sendIndex(res) {
   const indexPath = path.join(ROOT, 'index.html');
   sendFile(res, indexPath);
+}
+
+// WebSocket 热更新（简单实现：广播 reload 消息）
+let wsClients = [];
+const wsServer = http.createServer(); // 独立端口用于 WebSocket
+
+function broadcastReload() {
+  for (const client of wsClients) {
+    try {
+      client.send(JSON.stringify({ type: 'reload' }));
+    } catch (_) {}
+  }
+}
+
+// 文件监听（简单实现）
+const WATCH_DIRS = [path.join(ROOT, 'core'), path.join(ROOT, 'components'), path.join(ROOT, 'pages'), path.join(ROOT, 'styles')];
+let watchTimeouts = new Map();
+for (const dir of WATCH_DIRS) {
+  if (fs.existsSync(dir)) {
+    fs.watch(dir, { recursive: true }, (eventType, filename) => {
+      if (!filename || filename.endsWith('.map')) return;
+      // 防抖：500ms 内只触发一次 reload
+      clearTimeout(watchTimeouts.get(dir));
+      watchTimeouts.set(dir, setTimeout(() => {
+        console.log(`[WebFast] File changed: ${filename}, reloading...`);
+        broadcastReload();
+      }, 500));
+    });
+  }
 }
 
 const server = http.createServer((req, res) => {

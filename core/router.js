@@ -27,18 +27,20 @@ import { preserveState } from './diff.js';
 
 /**
  * 将路由路径转为正则表达式和参数名列表
- * @param {string} path - 如 '/user/:id' 或 '/user/:id/posts/:postId'
+ * 支持动态参数 :param 和通配符 *
+ * @param {string} path - 如 '/user/:id' 或 '/user/:id/posts/:postId' 或 '/catch-all/*'
  * @returns {{regex: RegExp, keys: string[]}}
  */
 function compileRoute(path) {
   const keys = [];
-  // 将 :param 替换为捕获组，并支持可选的末尾 /
+  // 将 :param 替换为捕获组，* 替换为通配符，并支持可选的末尾 /
   const regexStr = path
     .replace(/\//g, '\\/')
     .replace(/:([^/]+)/g, (_, key) => {
       keys.push(key);
       return '([^/]+)';
-    });
+    })
+    .replace(/\*/g, '(.*)');
   const regex = new RegExp(`^${regexStr}\/?$`);
   return { regex, keys };
 }
@@ -51,18 +53,58 @@ class Router {
    * @param {string} [options.mode='history'] - 'history' | 'hash'
    * @param {Function} [options.on404] - 404 处理函数
    */
-  constructor({ container, routes = [], mode = 'history', on404 } = {}) {
+  constructor({ container, routes = [], mode = 'history', on404, scrollBehavior } = {}) {
     this._container = document.querySelector(container);
-    this._routes = routes.map(r => ({ ...r, ...compileRoute(r.path) }));
+    this._routes = this._flattenRoutes(routes);
     this._mode = mode;
     this._on404 = on404;
+    this._scrollBehavior = scrollBehavior || (() => window.scrollTo({ top: 0, behavior: 'smooth' }));
     this._currentRoute = null;
     this._currentPage = null;
+    this._beforeEach = null;
+    this._afterEach = null;
 
     // 绑定导航方法
     this.navigate = this.navigate.bind(this);
     this._onPopState = this._onPopState.bind(this);
     this._onClick = this._onClick.bind(this);
+  }
+
+  /**
+   * 扁平化嵌套路由
+   * 将 children 路由展开为完整路径
+   * @param {Array} routes
+   * @param {string} parentPath
+   * @returns {Array}
+   * @private
+   */
+  _flattenRoutes(routes, parentPath = '') {
+    const flat = [];
+    for (const route of routes) {
+      const fullPath = parentPath + route.path;
+      const compiled = compileRoute(fullPath);
+      flat.push({ ...route, ...compiled, path: fullPath, _parent: parentPath || null });
+      if (route.children) {
+        flat.push(...this._flattenRoutes(route.children, fullPath.replace(/\/$/, '') + '/'));
+      }
+    }
+    return flat;
+  }
+
+  /**
+   * 注册全局前置守卫
+   * @param {Function} fn - (to, from) => boolean | string | Promise
+   */
+  beforeEach(fn) {
+    this._beforeEach = fn;
+  }
+
+  /**
+   * 注册全局后置钩子
+   * @param {Function} fn - (to, from) => void
+   */
+  afterEach(fn) {
+    this._afterEach = fn;
   }
 
   /** 启动路由
@@ -151,16 +193,37 @@ class Router {
       return;
     }
 
+    const from = this._currentRoute ? { path: this._currentRoute.path, query: this._currentRoute.query } : null;
+    const to = { path: matchedRoute.path, query, params, meta: matchedRoute.meta };
+
+    // 执行全局 beforeEach 守卫
+    if (this._beforeEach) {
+      const result = await this._beforeEach(to, from);
+      if (result === false) return;
+      if (typeof result === 'string') {
+        this.navigate(result);
+        return;
+      }
+    }
+
     // 执行 beforeLeave（当前页面）
     if (this._currentPage && this._currentRoute && this._currentRoute.beforeLeave) {
       const canLeave = await this._currentRoute.beforeLeave(this._currentPage, { path, query, params });
       if (canLeave === false) return;
+      if (typeof canLeave === 'string') {
+        this.navigate(canLeave);
+        return;
+      }
     }
 
     // 执行 beforeEnter（目标页面）
     if (matchedRoute.beforeEnter) {
-      const canEnter = await matchedRoute.beforeEnter({ path, query, params });
+      const canEnter = await matchedRoute.beforeEnter({ path, query, params, meta: matchedRoute.meta });
       if (canEnter === false) return;
+      if (typeof canEnter === 'string') {
+        this.navigate(canEnter);
+        return;
+      }
     }
 
     // 懒加载页面组件
@@ -207,7 +270,8 @@ class Router {
         // 更新引用
         this._currentPage = newPage;
         this._currentRoute = matchedRoute;
-
+        this._currentRoute.query = query;
+        
         // 重新绑定新页面的事件
         if (newPage._bindEvents) {
           newPage._bindEvents();
@@ -218,15 +282,31 @@ class Router {
         if (newPage.onConnected) {
           newPage.onConnected();
         }
+        
+        // 执行全局 afterEach 钩子
+        if (this._afterEach) {
+          this._afterEach(to, from);
+        }
+        
+        // 滚动行为控制
+        this._scrollBehavior(to, from);
       } else {
         // 首次加载：直接挂载
         const mountTarget = newPage.el || newPage;
         this._container.appendChild(mountTarget);
-
+      
         this._currentPage = newPage;
         this._currentRoute = matchedRoute;
+        this._currentRoute.query = query;
+      
+        // 执行全局 afterEach 钩子
+        if (this._afterEach) {
+          this._afterEach(to, from);
+        }
+      
+        // 滚动行为控制
+        this._scrollBehavior(to, from);
       }
-
     } catch (err) {
       console.error(`[Router] Failed to load page for ${path}:`, err);
       this._container.innerHTML = `<div style="padding:20px;color:red">Error loading page: ${err.message}</div>`;

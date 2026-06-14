@@ -30,13 +30,62 @@ class Store {
    * @param {object} options
    * @param {object} options.state - 初始状态
    * @param {object} options.actions - 操作方法，签名 (state, payload) => newState
+   * @param {object} options.getters - 派生状态计算函数，签名 (state) => value
+   * @param {object} options.modules - 子模块 { name: StoreOptions }
    */
-  constructor(name, { state = {}, actions = {} } = {}) {
+  constructor(name, { state = {}, actions = {}, getters = {}, modules = {} } = {}) {
     this._name = name;
     this._state = deepClone(state);
     this._actions = actions;
+    this._getters = {};
+    this._modules = new Map();
+    this._plugins = [];
+    this._batchTimer = null;
+    this._pendingNotify = false;
     /** @type {Set<(state: object) => void>} */
     this._subscribers = new Set();
+
+    // 注册 getters
+    for (const [key, fn] of Object.entries(getters)) {
+      Object.defineProperty(this._getters, key, {
+        get: () => fn(this._state),
+        enumerable: true,
+      });
+    }
+
+    // 注册子模块（命名空间）
+    for (const [moduleName, moduleOptions] of Object.entries(modules)) {
+      const moduleStore = new Store(`${name}/${moduleName}`, moduleOptions);
+      this._modules.set(moduleName, moduleStore);
+      // 代理模块状态到根状态
+      this._state[moduleName] = moduleStore._state;
+    }
+  }
+
+  /**
+   * 获取 getter 值
+   * @param {string} key
+   * @returns {any}
+   */
+  get(key) {
+    if (this._getters[key] !== undefined) {
+      return this._getters[key];
+    }
+    // 尝试从模块获取
+    const [moduleName, getterName] = key.split('/');
+    if (getterName && this._modules.has(moduleName)) {
+      return this._modules.get(moduleName).get(getterName);
+    }
+    return undefined;
+  }
+
+  /**
+   * 注册插件
+   * @param {Function} plugin - (store) => { ... }
+   */
+  use(plugin) {
+    this._plugins.push(plugin);
+    plugin(this);
   }
 
   /** 获取当前状态的深拷贝 */
@@ -88,7 +137,14 @@ class Store {
   _commit(newState) {
     const oldState = this._state;
     this._state = newState;
-    this._notify(oldState, newState);
+    // 批量更新：使用微任务合并多次通知
+    if (!this._pendingNotify) {
+      this._pendingNotify = true;
+      queueMicrotask(() => {
+        this._pendingNotify = false;
+        this._notify(oldState, this._state);
+      });
+    }
   }
 
   /**
@@ -98,7 +154,17 @@ class Store {
    */
   subscribe(fn) {
     this._subscribers.add(fn);
+    // 立即返回当前状态（方便初始化）
     return () => this._subscribers.delete(fn);
+  }
+
+  /**
+   * 获取子模块
+   * @param {string} name
+   * @returns {Store|undefined}
+   */
+  module(name) {
+    return this._modules.get(name);
   }
 
   /**
