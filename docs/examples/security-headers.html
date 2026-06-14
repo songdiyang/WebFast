@@ -1,0 +1,87 @@
+<!--
+  示例：安全头部配置（CSP 和其他安全头）
+  标准：W3C CSP Level 3 + 安全最佳实践
+  说明：以下配置应通过服务器 HTTP 响应头设置，<meta> 标签仅作为备选方案
+-->
+
+<!--
+  推荐方式：通过服务器设置 HTTP 响应头
+  
+  Content-Security-Policy:
+    default-src 'self';
+    script-src 'self';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: https:;
+    font-src 'self';
+    connect-src 'self';
+    media-src 'self';
+    object-src 'none';
+    frame-src 'none';
+    base-uri 'self';
+    form-action 'self';
+    upgrade-insecure-requests;
+    frame-ancestors 'none';
+  
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+-->
+
+<!-- 备选方式：通过 <meta> 标签设置（功能有限） -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <!-- CSP：内容安全策略 -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: https:;
+      font-src 'self';
+      connect-src 'self';
+      media-src 'self';
+      object-src 'none';
+      frame-src 'none';
+      base-uri 'self';
+      form-action 'self';
+      upgrade-insecure-requests;
+    "
+  />
+  
+  <!-- 防止点击劫持 -->
+  <meta http-equiv="X-Frame-Options" content="DENY" />
+  
+  <!-- 防止 MIME 类型嗅探 -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  
+  <!-- Referrer 策略 -->
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  
+  <!-- 权限策略（限制浏览器 API） -->
+  <meta
+    http-equiv="Permissions-Policy"
+    content="
+      camera=(),
+      microphone=(),
+      geolocation=(self),
+      payment=(),
+      usb=(),
+      magnetometer=(),
+      gyroscope=(),
+      accelerometer=()
+    "
+  />
+  
+  <title>安全页面示例</title>
+</head>
+<body>
+  <!-- 页面内容 -->
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!--
+  示例：语义化 HTML 文章页面
+  标准：WHATWG HTML Living Standard
+  特点：完整的语义化标签使用，无障碍友好
+-->
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebFast 框架发布 - 技术博客</title>
+</head>
+<body>
+  <!-- 跳过导航链接（无障碍） -->
+  <a href="#main-content" class="skip-link">跳转到主要内容</a>
+
+  <header class="page-header">
+    <a href="/" class="logo">技术博客</a>
+    <nav aria-label="主导航">
+      <ul class="nav-list">
+        <li><a href="/">首页</a></li>
+        <li><a href="/articles">文章</a></li>
+        <li><a href="/about">关于</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    <article class="article">
+      <header class="article-header">
+        <h1>WebFast：面向 AI 的原生前端框架</h1>
+        <p class="article-meta">
+          <time datetime="2026-06-14">2026年6月14日</time>
+          <span class="author">作者：张三</span>
+        </p>
+      </header>
+
+      <section class="article-section">
+        <h2>为什么需要 WebFast？</h2>
+        <p>当前主流前端框架（React、Vue、Angular）虽然功能强大，但与 AI 代码生成存在严重不适配...</p>
+
+        <figure class="article-figure">
+          <img
+            src="./images/framework-comparison.png"
+            alt="WebFast 与 React/Vue/Angular 的对比图表，显示构建时间、代码复杂度、AI 适配度三个维度"
+            width="800"
+            height="450"
+            loading="lazy"
+          />
+          <figcaption>图 1：主流框架与 WebFast 的对比分析</figcaption>
+        </figure>
+      </section>
+
+      <section class="article-section">
+        <h2>核心特性</h2>
+        <ul>
+          <li><strong>零构建</strong>：浏览器原生 ES Modules</li>
+          <li><strong>零语法糖</strong>：原生 JavaScript + HTML + CSS</li>
+          <li><strong>约定式结构</strong>：严格的目录和文件命名规范</li>
+        </ul>
+      </section>
+
+      <aside class="article-sidebar">
+        <h3>相关文章</h3>
+        <ul>
+          <li><a href="/articles/web-components">深入理解 Web Components</a></li>
+          <li><a href="/articles/es-modules">ES Modules 最佳实践</a></li>
+        </ul>
+      </aside>
+    </article>
+  </main>
+
+  <footer class="page-footer">
+    <p>&copy; 2026 技术博客. 保留所有权利。</p>
+    <address>
+      联系作者：<a href="mailto:author@example.com">author@example.com</a>
+    </address>
+  </footer>
+</body>
+</html>

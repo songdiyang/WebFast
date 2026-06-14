@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebFast App</title>
+  <link rel="stylesheet" href="./styles/reset.css">
+  <link rel="stylesheet" href="./styles/variables.css">
+  <link rel="stylesheet" href="./styles/global.css">
+  <link rel="stylesheet" href="./pages/home/style.css">
+  <link rel="stylesheet" href="./components/app-header/style.css">
+  <link rel="stylesheet" href="./components/app-footer/style.css">
+  <base href="/">
+</head>
+<body>
+  <div id="app">
+    <div class="page wf-page" data-page="home">
+      <header class="header">
+        <div class="header-inner">
+          <a href="/" class="logo">WebFast</a>
+          <nav class="nav">
+            <a href="/" class="nav-link">首页</a>
+            <a href="https://github.com/yourname/webfast" target="_blank" class="nav-link">GitHub</a>
+          </nav>
+        </div>
+      </header>
+
+      <main class="home-content">
+        <section class="hero">
+          <h1>WebFast</h1>
+          <p class="subtitle">面向 AI 的原生前端框架 — 零构建、零语法糖、纯原生 Web</p>
+          <div class="actions">
+            <a href="https://github.com/yourname/webfast" target="_blank" class="btn demo-btn">查看文档</a>
+            <a href="https://github.com/yourname/webfast" target="_blank" class="btn btn-secondary">了解更多</a>
+          </div>
+        </section>
+
+        <section class="features">
+          <div class="card">
+            <h3>零构建</h3>
+            <p>浏览器原生 ES Modules，写什么就跑什么，无需 Webpack/Vite。</p>
+          </div>
+          <div class="card">
+            <h3>零语法糖</h3>
+            <p>原生 JavaScript + HTML + CSS，AI 生成的代码就是最终代码。</p>
+          </div>
+          <div class="card">
+            <h3>约定式结构</h3>
+            <p>严格的目录和文件命名规范，AI 只需按模板填充即可。</p>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>WebFast Framework - 面向 AI 的原生前端架构</p>
+      </footer>
+    </div>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

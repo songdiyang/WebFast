@@ -1,0 +1,109 @@
+<!--
+  示例：无障碍表单
+  标准：WCAG 2.2 AA
+  特点：完整的标签关联、错误提示、ARIA 属性
+-->
+
+<form
+  action="/api/contact"
+  method="POST"
+  class="contact-form"
+  aria-labelledby="form-title"
+>
+  <h2 id="form-title">联系我们</h2>
+
+  <div class="form-group">
+    <label for="contact-name">
+      姓名
+      <span class="required" aria-hidden="true">*</span>
+    </label>
+    <input
+      type="text"
+      id="contact-name"
+      name="name"
+      required
+      autocomplete="name"
+      aria-required="true"
+      aria-describedby="name-error"
+    />
+    <span id="name-error" class="error-message" role="alert" aria-live="polite"></span>
+  </div>
+
+  <div class="form-group">
+    <label for="contact-email">
+      邮箱
+      <span class="required" aria-hidden="true">*</span>
+    </label>
+    <input
+      type="email"
+      id="contact-email"
+      name="email"
+      required
+      autocomplete="email"
+      aria-required="true"
+      aria-describedby="email-error email-hint"
+      placeholder="example@domain.com"
+    />
+    <span id="email-hint" class="form-hint">我们将通过此邮箱回复您</span>
+    <span id="email-error" class="error-message" role="alert" aria-live="polite"></span>
+  </div>
+
+  <div class="form-group">
+    <label for="contact-phone">电话</label>
+    <input
+      type="tel"
+      id="contact-phone"
+      name="phone"
+      autocomplete="tel"
+      pattern="[0-9]{11}"
+      aria-describedby="phone-hint"
+    />
+    <span id="phone-hint" class="form-hint">11位手机号码</span>
+  </div>
+
+  <div class="form-group">
+    <label for="contact-subject">主题</label>
+    <select id="contact-subject" name="subject" required>
+      <option value="">请选择</option>
+      <option value="general">一般咨询</option>
+      <option value="support">技术支持</option>
+      <option value="business">商务合作</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="contact-message">
+      留言内容
+      <span class="required" aria-hidden="true">*</span>
+    </label>
+    <textarea
+      id="contact-message"
+      name="message"
+      rows="5"
+      required
+      minlength="10"
+      maxlength="1000"
+      aria-required="true"
+      aria-describedby="message-error message-count"
+    ></textarea>
+    <span id="message-count" class="char-count">0 / 1000</span>
+    <span id="message-error" class="error-message" role="alert" aria-live="polite"></span>
+  </div>
+
+  <div class="form-group form-group--checkbox">
+    <label class="checkbox-label">
+      <input
+        type="checkbox"
+        name="agree"
+        required
+        aria-required="true"
+      />
+      我已阅读并同意<a href="/privacy">隐私政策</a>
+    </label>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn--primary">提交</button>
+    <button type="reset" class="btn btn--secondary">重置</button>
+  </div>
+</form>

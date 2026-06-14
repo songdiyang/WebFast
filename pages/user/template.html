@@ -1,0 +1,25 @@
+<div class="page">
+  <app-header></app-header>
+
+  <main class="user-content">
+    <h1>用户详情</h1>
+
+    <div class="card user-card">
+      <div class="field">
+        <label>用户 ID:</label>
+        <span class="value">{{userId}}</span>
+      </div>
+      <div class="field">
+        <label>查询参数:</label>
+        <span class="value">{{query}}</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <a href="/" class="btn btn-secondary">返回首页</a>
+      <a href="/user/{{userId}}/posts" class="btn">查看文章（404 测试）</a>
+    </div>
+  </main>
+
+  <app-footer></app-footer>
+</div>
